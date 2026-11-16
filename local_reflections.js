@@ -38,12 +38,13 @@ if(r5Active>.5&&r5Surface&&vR5Projection.w>0.){
   m.customProgramCacheKey=()=> 'r5_ev_local_planar_radiance_v1';m.needsUpdate=true;
  }
  const bounds=new THREE.Box3(new THREE.Vector3(5.8,0,-19.2),new THREE.Vector3(6.04,3.1,-13.2));
- const frustum=new THREE.Frustum(),viewProjection=new THREE.Matrix4();let captures=0,wasVisible=false;
- return {update(){
+ const frustum=new THREE.Frustum(),viewProjection=new THREE.Matrix4();let captures=0,wasVisible=false,dirty=true,lastCamera='';
+ return {async prepare(){const previous=renderer.getRenderTarget();try{renderer.setRenderTarget(target);await renderer.compileAsync(scene,camera);}finally{renderer.setRenderTarget(previous);}},invalidate(){dirty=true;},update(){
   camera.updateMatrixWorld();viewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(viewProjection);
   const visible=camera.position.x<5.83&&frustum.intersectsBox(bounds);
-  uniforms.r5Active.value=0;
-  if(visible){uniforms.r5Capture.value=1;try{mirror.onBeforeRender(renderer,scene,camera);}finally{uniforms.r5Capture.value=0;}matrix.copy(mirror.material.uniforms.textureMatrix.value).multiply(inverse);uniforms.r5Active.value=1;captures++;}
+  const key=camera.matrixWorld.elements.join(',')+';'+camera.projectionMatrix.elements.join(',');
+  uniforms.r5Active.value=visible?1:0;
+  if(visible&&(dirty||key!==lastCamera||!wasVisible)){uniforms.r5Capture.value=1;try{mirror.onBeforeRender(renderer,scene,camera);}finally{uniforms.r5Capture.value=0;}matrix.copy(mirror.material.uniforms.textureMatrix.value).multiply(inverse);uniforms.r5Active.value=1;captures++;dirty=false;lastCamera=key;}
   wasVisible=visible;
  },get diagnostics(){return {captures,active:wasVisible,planeX:5.885,resolution:[1024,1024],physicalMaterialsChanged:false}},dispose(){mirror.dispose();mirror.geometry.dispose();}};
 }
