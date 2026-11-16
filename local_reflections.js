@@ -4,9 +4,8 @@ import { Reflector } from './vendor/addons/objects/Reflector.js';
 // A view-dependent planar capture only for the coplanar EV front region.
 // No architecture, albedo, physical roughness or metalness is changed.
 export function createLocalReflections(renderer,scene,camera,model){
- const mirror=new Reflector(new THREE.PlaneGeometry(5.3,3.1),{textureWidth:1024,textureHeight:1024,clipBias:.0003,multisample:0});
- mirror.position.set(5.885,1.55,-16.55);mirror.rotation.y=-Math.PI/2;mirror.updateMatrixWorld(true);
- const target=mirror.getRenderTarget();target.texture.generateMipmaps=true;target.texture.minFilter=THREE.LinearMipmapLinearFilter;
+ const mirrors=[1024,512].map(size=>{const mirror=new Reflector(new THREE.PlaneGeometry(5.3,3.1),{textureWidth:size,textureHeight:size,clipBias:.0003,multisample:0});mirror.position.set(5.885,1.55,-16.55);mirror.rotation.y=-Math.PI/2;mirror.updateMatrixWorld(true);const target=mirror.getRenderTarget();target.texture.generateMipmaps=true;target.texture.minFilter=THREE.LinearMipmapLinearFilter;return mirror;});
+ let mirror=mirrors[0];const target=mirror.getRenderTarget();
  const matrix=new THREE.Matrix4(),inverse=mirror.matrixWorld.clone().invert();
  const uniforms={r5Planar:{value:target.texture},r5Projection:{value:matrix},r5Active:{value:0},r5Capture:{value:0}};
  const materials=new Set();
@@ -39,12 +38,12 @@ if(r5Active>.5&&r5Surface&&vR5Projection.w>0.){
  }
  const bounds=new THREE.Box3(new THREE.Vector3(5.8,0,-19.2),new THREE.Vector3(6.04,3.1,-13.2));
  const frustum=new THREE.Frustum(),viewProjection=new THREE.Matrix4();let captures=0,wasVisible=false,dirty=true,lastCamera='';
- return {async prepare(){const previous=renderer.getRenderTarget();try{renderer.setRenderTarget(target);await renderer.compileAsync(scene,camera);}finally{renderer.setRenderTarget(previous);}},invalidate(){dirty=true;},update(){
+ return {setDetail(scale){const next=mirrors[scale<.9?1:0];if(next===mirror)return false;mirror=next;uniforms.r5Planar.value=mirror.getRenderTarget().texture;dirty=true;return true;},async prepare(){const previous=renderer.getRenderTarget();try{renderer.setRenderTarget(target);await renderer.compileAsync(scene,camera);}finally{renderer.setRenderTarget(previous);}},invalidate(){dirty=true;},update(){
   camera.updateMatrixWorld();viewProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(viewProjection);
   const visible=camera.position.x<5.83&&frustum.intersectsBox(bounds);
   const key=camera.matrixWorld.elements.join(',')+';'+camera.projectionMatrix.elements.join(',');
   uniforms.r5Active.value=visible?1:0;
   if(visible&&(dirty||key!==lastCamera||!wasVisible)){uniforms.r5Capture.value=1;try{mirror.onBeforeRender(renderer,scene,camera);}finally{uniforms.r5Capture.value=0;}matrix.copy(mirror.material.uniforms.textureMatrix.value).multiply(inverse);uniforms.r5Active.value=1;captures++;dirty=false;lastCamera=key;}
   wasVisible=visible;
- },get diagnostics(){return {captures,active:wasVisible,planeX:5.885,resolution:[1024,1024],physicalMaterialsChanged:false}},dispose(){mirror.dispose();mirror.geometry.dispose();}};
+ },get diagnostics(){return {captures,active:wasVisible,planeX:5.885,resolution:[mirror.getRenderTarget().width,mirror.getRenderTarget().height],physicalMaterialsChanged:false}},dispose(){for(const m of mirrors){m.dispose();m.geometry.dispose();}}};
 }
