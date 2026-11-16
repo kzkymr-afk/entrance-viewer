@@ -1,0 +1,23 @@
+import {OUTLINE,COFFERS,CEILING_HEIGHTS} from './ceiling-layout.js';
+const ns='http://www.w3.org/2000/svg',plan=document.querySelector('#plan');
+function element(root,name,attributes,text){const e=document.createElementNS(ns,name);for(const [k,v] of Object.entries(attributes))e.setAttribute(k,v);if(text)e.textContent=text;root.append(e);return e;}
+const x=n=>105+n*45,y=z=>650+z*27;
+element(plan,'rect',{width:600,height:770,fill:'#fffdf8'});element(plan,'text',{x:28,y:35,fill:'#637369','font-size':12},'天井伏図 / 大きな2区画でまとめる');element(plan,'polygon',{points:OUTLINE.map(([a,b])=>[x(a),y(b)].join(',')).join(' '),fill:'#d8d5c8',stroke:'#65736a','stroke-width':2});
+for(const c of COFFERS){element(plan,'rect',{x:x(c.x0),y:y(c.z0),width:(c.x1-c.x0)*45,height:(c.z1-c.z0)*27,fill:'#fbf8ee',stroke:'#d0a15f','stroke-width':5});element(plan,'text',{x:(x(c.x0)+x(c.x1))/2,y:(y(c.z0)+y(c.z1))/2,'text-anchor':'middle',fill:'#7d6a50','font-size':13},c.id==='approach'?'連続する折り上げ':'EV前の大きな折り上げ');}
+element(plan,'line',{x1:x(0),x2:x(0),y1:y(0),y2:y(-20.2),stroke:'#72958b','stroke-width':4});
+element(plan,'text',{x:48,y:390,fill:'#577d70','font-size':12,transform:'rotate(-90 48 390)'},'テナント・ガラス側');
+for(let i=0;i<3;i++){const z=-14.2-i*2.0;element(plan,'rect',{x:x(5.865)+8,y:y(z-.72),width:59,height:39,fill:'#d0d5d0',stroke:'#8a9790'});element(plan,'text',{x:x(5.865)+37,y:y(z-.72)+25,'text-anchor':'middle',fill:'#455a4b','font-size':12},'EV');}
+element(plan,'text',{x:105,y:685,fill:'#3d5b4c','font-size':15},'昭和通り側・入口');element(plan,'text',{x:105,y:710,fill:'#798277','font-size':11},'入口側の内幅 約4.3m');element(plan,'text',{x:105,y:78,fill:'#3d5b4c','font-size':13},'主階段側');element(plan,'text',{x:405,y:135,fill:'#687b6c','font-size':11},'EV前の内幅 約5.9m');
+element(plan,'path',{d:'M 485 450 L 400 450 L 323 320',fill:'none',stroke:'#8a9a86','stroke-width':1.3});element(plan,'text',{x:404,y:476,fill:'#61715f','font-size':11},'幅の変化を受ける');element(plan,'text',{x:404,y:493,fill:'#61715f','font-size':11},'下がり天井の帯');element(plan,'text',{x:28,y:749,fill:'#8a8f82','font-size':10},'色線＝間接照明の縁 / 周囲＝下がり天井 / 中央＝高い天井面');
+const section=document.querySelector('#section');element(section,'rect',{width:1000,height:260,fill:'#fffdf8'});element(section,'rect',{x:55,y:40,width:620,height:22,fill:'#292f2f'});element(section,'text',{x:700,y:56,fill:'#667267','font-size':13},'上部躯体：約'+CEILING_HEIGHTS.exposedSlab.toFixed(2)+'m（仮定）');
+element(section,'rect',{x:190,y:93,width:195,height:49,rx:3,fill:'#363e3d'});element(section,'text',{x:220,y:122,fill:'#d9ddcf','font-size':12},'黒塗装ダクト');
+for(let i=0;i<5;i++)element(section,'line',{x1:470,y1:100+i*7,x2:620,y2:100+i*7,stroke:'#343d39','stroke-width':4});element(section,'text',{x:704,y:125,fill:'#667267','font-size':13},'設備・配線は想定配置');
+for(const at of [120,425,655])element(section,'line',{x1:at,y1:61,x2:at,y2:190,stroke:'#7e8a7e','stroke-width':2});
+for(let i=0;i<16;i++)element(section,'rect',{x:60+i*39,y:185,width:13,height:36,rx:1.6,fill:'#96673f'});element(section,'text',{x:700,y:206,fill:'#667267','font-size':13},'木ルーバー下面：約2.945m（仮定）');element(section,'text',{x:55,y:249,fill:'#7a8174','font-size':11},'直上の天井板を設けず、設備の奥行きを透かす。黒い面は高い位置の躯体を想定。');
+
+const cofferSection=document.querySelector('#coffer-section'),sy=h=>228-(h-CEILING_HEIGHTS.soffit)*300;
+element(cofferSection,'rect',{width:1000,height:285,fill:'#fffdf8'});element(cofferSection,'text',{x:30,y:30,fill:'#637369','font-size':12},'折り上げの検討断面 / 立ち上がり面を見せる');
+for(const xx of [70,650])element(cofferSection,'rect',{x:xx,y:sy(CEILING_HEIGHTS.cofferRiserTop),width:180,height:(CEILING_HEIGHTS.cofferRiserTop-CEILING_HEIGHTS.soffit)*300,fill:'#d7d4c9',stroke:'#90988b','stroke-width':1.5});
+element(cofferSection,'rect',{x:245,y:sy(CEILING_HEIGHTS.raised+.03),width:410,height:9,fill:'#efece1',stroke:'#929c8e'});
+for(const xx of [243,650])element(cofferSection,'rect',{x:xx,y:sy(3.16),width:7,height:4,fill:'#e7b869'});element(cofferSection,'text',{x:330,y:sy(CEILING_HEIGHTS.raised+.10),fill:'#5d705d','font-size':13},'中央下面 約'+CEILING_HEIGHTS.raised.toFixed(2)+'m');
+element(cofferSection,'line',{x1:883,y1:sy(CEILING_HEIGHTS.raised),x2:883,y2:sy(CEILING_HEIGHTS.soffit),stroke:'#b18c54','stroke-width':2});for(const h of [CEILING_HEIGHTS.raised,CEILING_HEIGHTS.soffit])element(cofferSection,'line',{x1:873,y1:sy(h),x2:893,y2:sy(h),stroke:'#b18c54','stroke-width':2});element(cofferSection,'text',{x:902,y:180,fill:'#8b7049','font-size':13},'約380mm');element(cofferSection,'text',{x:70,y:257,fill:'#5d705d','font-size':13},'周囲下面 約'+CEILING_HEIGHTS.soffit.toFixed(2)+'m');element(cofferSection,'text',{x:340,y:257,fill:'#8b7049','font-size':12},'2700Kの光源を隠し、段差の奥へ光を回す');
