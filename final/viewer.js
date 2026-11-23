@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {RenderedRoom} from './rendered-room.js';
+import {RenderedRoom} from './rendered-room.js?v=27';
 import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {batchWalkMeshes} from './walk-batches.js';
 const el=id=>document.getElementById(id);
@@ -8,7 +8,7 @@ const presetNames={entry:'PROPOSAL entry',ceiling:'PROPOSAL entry',rear:'PROPOSA
 const keys=new Set(),cache=new Map();
 const roomViews=new RenderedRoom();
 let renderer,scene,camera,current,grid,catalog,yaw=0,pitch=0,pending=false,staticMode=false,failed=false,token=0,drag=null,lastTime=0;
-function resize(){if(!renderer)return;const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setPixelRatio(Math.min(1,1152/w,768/h));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();draw();}
+function resize(){if(!renderer)return;const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setPixelRatio(Math.min(devicePixelRatio,2048/w,1440/h));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();draw();}
 function draw(){if(!pending&&renderer&&!staticMode){pending=true;requestAnimationFrame(frame);}}
 function passable(x,z){const i=Math.floor((x-grid.originX)/grid.cellSize),j=Math.floor((z-grid.originZ)/grid.cellSize);return i>=0&&j>=0&&i<grid.width&&j<grid.height&&!grid.blocked[j*grid.width+i];}
 function frame(now){
@@ -19,7 +19,7 @@ function frame(now){
   const x=p.x+(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed,z=p.z+(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*speed;
   if(passable(x,p.z))p.x=x;if(passable(p.x,z))p.z=z;}
  camera.rotation.set(pitch,yaw,0,'YXZ');
- if(!roomViews.renderAnchor(renderer,camera))renderer.render(scene,camera);if(keys.size)draw();
+ renderer.render(scene,camera);if(keys.size)draw();
 }
 
 function preset(){still.src=scheme.value+'_'+view.value+'.jpg';if(!catalog||!camera)return;
@@ -27,7 +27,7 @@ function preset(){still.src=scheme.value+'_'+view.value+'.jpg';if(!catalog||!cam
 function mode(enable){staticMode=enable;still.hidden=!enable;el('mode').textContent=enable?'3Dに戻る':'最終パースを表示';el('mode').setAttribute('aria-pressed',String(enable));status.textContent='';keys.clear();if(!enable){if(failed){load();return;}draw();}}
 async function json(url){const r=await fetch(url);if(!r.ok)throw Error(url);return r.json();}
 function init(){
- renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'low-power'});renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;host.append(renderer.domElement);
+ renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'low-power'});renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;host.append(renderer.domElement);
  scene=new THREE.Scene();scene.background=new THREE.Color(0xbbc5c5);camera=new THREE.PerspectiveCamera(56,1,.045,100);
  const canvas=renderer.domElement;
  canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};

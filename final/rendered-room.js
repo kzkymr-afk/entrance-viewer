@@ -9,7 +9,7 @@ vec2 roomUV(vec3 ray) {
 export class RenderedRoom {
  constructor(){
   this.loader=new THREE.TextureLoader();
-  this.uniforms={};
+  this.uniforms={soffit:{value:null},glazing:{value:null},upper:{value:null},splitCoffer:{value:false},openCeiling:{value:false}};
   for(let k=0;k<3;k++){
    this.uniforms['capture'+k]={value:null};
    this.uniforms['distanceMap'+k]={value:null};
@@ -30,19 +30,24 @@ export class RenderedRoom {
    color.colorSpace=THREE.NoColorSpace;color.wrapS=THREE.RepeatWrapping;
    depth.colorSpace=THREE.NoColorSpace;depth.minFilter=depth.magFilter=THREE.NearestFilter;depth.generateMipmaps=false;
    return {color,depth,origin:new THREE.Vector3().fromArray(cameras[names[i]][0])};
-  }));return images;
+   }));
+  const surfaces=await Promise.all(['soffit','glazing'].map(async name=>{
+   const texture=await this.loader.loadAsync(key+'_'+name+'.jpg');
+   texture.anisotropy=8;
+   return texture;
+  }));
+  const splitCoffer=key==='coffer';
+  const upper=splitCoffer ? await this.loader.loadAsync('coffer_upper.jpg') : surfaces[0];
+  upper.anisotropy=8;
+  return {images,surfaces,upper,splitCoffer,openCeiling:key==='wood'};
  }
- use(images){
+ use({images,surfaces,upper,splitCoffer,openCeiling}){
+  this.uniforms.openCeiling.value=openCeiling;this.uniforms.upper.value=upper;this.uniforms.splitCoffer.value=splitCoffer;
+  [this.uniforms.soffit.value,this.uniforms.glazing.value]=surfaces;
   this.images=images;
   images.forEach(({color,depth,origin},i)=>{
    this.uniforms['capture'+i].value=color;this.uniforms['distanceMap'+i].value=depth;this.uniforms['origin'+i].value.copy(origin);
   });
- }
- renderAnchor(renderer,camera){
-  if(!this.images)return false;
-  const anchor=this.images.find(p=>p.origin.distanceToSquared(camera.position)<.000001);
-  if(!anchor)return false;
-  this.material.uniforms.image.value=anchor.color;renderer.render(this.scene,camera);return true;
  }
  apply(material){
   material.onBeforeCompile=shader=>{
@@ -60,12 +65,30 @@ void sampleRoom(vec3 origin,sampler2D image,sampler2D depthImage,inout vec3 colo
  float weight=valid*mix(.05,1.,alignment*alignment)/(1.+dot(cameraPosition-origin,cameraPosition-origin)*.20);
  colors+=weight*texture2D(image,uv).rgb;total+=weight;
 }`;
-   shader.fragmentShader='varying vec3 roomPosition;\n'+uniforms+panoUV+fn+'\n'+shader.fragmentShader;
-   let body='vec3 projected=vec3(0.);float coverage=0.;';
+   shader.fragmentShader='uniform sampler2D soffit,glazing,upper;uniform bool splitCoffer,openCeiling;\nvarying vec3 roomPosition;\n'+uniforms+panoUV+fn+'\n'+shader.fragmentShader;
+   let body=`
+vec3 face=normalize(cross(dFdx(roomPosition),dFdy(roomPosition)));
+vec2 ceilingUV=vec2((roomPosition.x-2.6)/8.,(roomPosition.z+10.)/22.)+.5;
+vec2 glassUV=vec2((-roomPosition.z-10.)/22.,(roomPosition.y-1.75)/4.)+.5;
+bool inCeiling=roomPosition.y>=(splitCoffer ? 3.095 : 2.975) && roomPosition.y<3.39 && all(greaterThan(ceilingUV,vec2(0.))) && all(lessThan(ceilingUV,vec2(1.)));
+bool onWindow=abs(roomPosition.x)<.13 && roomPosition.z<-.1 && roomPosition.z>-20.1 && roomPosition.y<3.095 && roomPosition.y>.055 && abs(face.x)>.8;
+if(${material.name.includes('smoked warm oak') ? 'true' : 'false'}){
+ // The narrow sides share their blade's underside sample. Stay inside the blade at grazing angles.
+ vec2 bladeUV=ceilingUV;
+ bladeUV.y-=face.z*.009/22.;
+ gl_FragColor.rgb=texture2D(soffit,bladeUV).rgb*mix(.84,1.,abs(face.y));
+}else if(openCeiling && roomPosition.y>3.10 && roomPosition.z<0. && roomPosition.z>-20.2 && roomPosition.x>0. && roomPosition.x<5.7){
+ gl_FragColor.rgb=min(gl_FragColor.rgb,vec3(.12,.096,.078));
+}else if(inCeiling && abs(face.y)>.80){
+ gl_FragColor.rgb=splitCoffer && roomPosition.y>3.30 ? texture2D(upper,ceilingUV).rgb : texture2D(soffit,ceilingUV).rgb;
+}else if(onWindow){
+ gl_FragColor=vec4(texture2D(glazing,glassUV).rgb,1.);
+}else{
+ vec3 projected=vec3(0.);float coverage=0.;`;
    for(let i=0;i<3;i++)body+='sampleRoom(origin'+i+',capture'+i+',distanceMap'+i+',projected,coverage);';
-   body+='if(coverage>.0001){gl_FragColor.rgb=mix(gl_FragColor.rgb,projected/coverage,smoothstep(.001,.025,coverage));}';
+   body+='if(inCeiling)gl_FragColor.rgb=texture2D(soffit,ceilingUV).rgb;if(coverage>.0001){gl_FragColor.rgb=mix(gl_FragColor.rgb,projected/coverage,smoothstep(.001,.025,coverage));}}';
    shader.fragmentShader=shader.fragmentShader.replace('#include <colorspace_fragment>','#include <colorspace_fragment>\n'+body);
   };
-  material.customProgramCacheKey=()=>'cycles-room-v1';
+  material.customProgramCacheKey=()=>material.name.includes('smoked warm oak')?'room-oak-v27':'room-v27';
  }
 }
