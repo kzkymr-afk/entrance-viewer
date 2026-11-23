@@ -18,7 +18,7 @@ function frame(now){
   if(passable(x,p.z))p.x=x;if(passable(p.x,z))p.z=z;}
  camera.rotation.set(pitch,yaw,0,'YXZ');
  const nearby=[...catalog[scheme.value].lights].sort((a,b)=>distance(a)-distance(b)).slice(0,lamps.length);
- nearby.forEach((l,i)=>{const lamp=lamps[i];lamp.position.fromArray(l.pos);lamp.position.y-=.32;lamp.color.fromArray(l.color);lamp.intensity=l.name.includes('segment')?2.4: l.name.includes('cove')?1.4:4.5;});
+ nearby.forEach((l,i)=>{const lamp=lamps[i];lamp.position.fromArray(l.pos);lamp.position.y-=.04;lamp.target.position.copy(lamp.position);lamp.target.position.y+=l.name.includes('cove')?.8:-2;lamp.color.fromArray(l.color);lamp.intensity=l.name.includes('segment')?6: l.name.includes('cove')?.8:12;});
  renderer.render(scene,camera);if(keys.size)draw();
 }
 function distance(l){return (l.pos[0]-camera.position.x)**2+(l.pos[2]-camera.position.z)**2;}
@@ -31,7 +31,7 @@ function init(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0xbbc5c5);camera=new THREE.PerspectiveCamera(56,1,.045,100);
  const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();scene.environment=pmrem.fromScene(room,.04).texture;scene.environmentIntensity=.25;room.dispose();pmrem.dispose();
  scene.add(new THREE.HemisphereLight(0xffead1,0x958679,.65));
- for(let i=0;i<8;i++){const l=new THREE.PointLight(0xffe7cc,4,8,2);scene.add(l);lamps.push(l);}
+ for(let i=0;i<8;i++){const l=new THREE.SpotLight(0xffe7cc,6,10,1.17,.8,2);scene.add(l,l.target);lamps.push(l);}
  const canvas=renderer.domElement;
  canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};
  canvas.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-drag[0])*.004;pitch=THREE.MathUtils.clamp(pitch-(e.clientY-drag[1])*.004,-1.48,1.48);drag=[e.clientX,e.clientY];draw();};
@@ -53,6 +53,7 @@ async function load(){
     for(const key of ['name','map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap','roughness','metalness','transparent','opacity','alphaTest','side','vertexColors','emissiveIntensity','depthWrite'])if(m[key]!==undefined)simple[key]=m[key];
     for(const key of ['color','emissive','normalScale'])if(m[key])simple[key].copy(m[key]);
     if(m.transmission>.2){simple.transparent=true;simple.opacity=Math.min(simple.opacity,.24);simple.depthWrite=false;}
+    if(m.name.includes('smoked warm oak')){simple.color.setRGB(.18,.087,.036);simple.roughness=.70;simple.metalness=0;}
     materials.set(m,simple);return simple;
    }
    gltf.scene.traverse(o=>{if(o.isMesh)o.material=Array.isArray(o.material)?o.material.map(realtime):realtime(o.material);});
