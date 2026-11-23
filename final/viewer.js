@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {RenderedRoom} from './rendered-room.js?v=27';
+import {RenderedRoom} from './rendered-room.js?v=28';
 import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {batchWalkMeshes} from './walk-batches.js';
 const el=id=>document.getElementById(id);
@@ -8,7 +8,7 @@ const presetNames={entry:'PROPOSAL entry',ceiling:'PROPOSAL entry',rear:'PROPOSA
 const keys=new Set(),cache=new Map();
 const roomViews=new RenderedRoom();
 let renderer,scene,camera,current,grid,catalog,yaw=0,pitch=0,pending=false,staticMode=false,failed=false,token=0,drag=null,lastTime=0;
-function resize(){if(!renderer)return;const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setPixelRatio(Math.min(devicePixelRatio,2048/w,1440/h));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();draw();}
+function resize(){if(!renderer)return;const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setPixelRatio(Math.min(Math.max(2,devicePixelRatio),3072/w,1920/h));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();draw();}
 function draw(){if(!pending&&renderer&&!staticMode){pending=true;requestAnimationFrame(frame);}}
 function passable(x,z){const i=Math.floor((x-grid.originX)/grid.cellSize),j=Math.floor((z-grid.originZ)/grid.cellSize);return i>=0&&j>=0&&i<grid.width&&j<grid.height&&!grid.blocked[j*grid.width+i];}
 function frame(now){
