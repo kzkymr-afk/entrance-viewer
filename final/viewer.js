@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {RenderedRoom} from './rendered-room.js?v=28';
+import {RenderedRoom} from './rendered-room.js?v=29';
 import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {batchWalkMeshes} from './walk-batches.js';
 const el=id=>document.getElementById(id);

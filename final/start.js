@@ -18,7 +18,7 @@ if (walk) {
   el('travel').textContent = '定点360°に切替';
   el('hint').textContent = 'ドラッグで見回す · WASD／矢印で移動';
   el('pad').hidden = false;
-  await import('./viewer.js?v=28');
+  await import('./viewer.js?v=29');
 } else {
   await import('./panorama.js?v=24');
 }

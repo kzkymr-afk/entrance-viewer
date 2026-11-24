@@ -9,7 +9,7 @@ vec2 roomUV(vec3 ray) {
 export class RenderedRoom {
  constructor(){
   this.loader=new THREE.TextureLoader();
-  this.uniforms={soffit:{value:null},glazing:{value:null},upper:{value:null},splitCoffer:{value:false},openCeiling:{value:false}};
+  this.uniforms={floorShade:{value:null},soffit:{value:null},glazing:{value:null},upper:{value:null},splitCoffer:{value:false},openCeiling:{value:false}};
   for(let k=0;k<3;k++){
    this.uniforms['capture'+k]={value:null};
    this.uniforms['distanceMap'+k]={value:null};
@@ -31,7 +31,7 @@ export class RenderedRoom {
    depth.wrapS=THREE.RepeatWrapping;depth.colorSpace=THREE.NoColorSpace;depth.minFilter=depth.magFilter=THREE.NearestFilter;depth.generateMipmaps=false;
    return {color,depth,origin:new THREE.Vector3().fromArray(cameras[names[i]][0])};
    }));
-  const surfaces=await Promise.all(['soffit','glazing'].map(async name=>{
+  const surfaces=await Promise.all(['soffit','glazing','floor'].map(async name=>{
    const texture=await this.loader.loadAsync(key+'_'+name+'.jpg');
    texture.anisotropy=8;
    return texture;
@@ -43,7 +43,7 @@ export class RenderedRoom {
  }
  use({images,surfaces,upper,splitCoffer,openCeiling}){
   this.uniforms.openCeiling.value=openCeiling;this.uniforms.upper.value=upper;this.uniforms.splitCoffer.value=splitCoffer;
-  [this.uniforms.soffit.value,this.uniforms.glazing.value]=surfaces;
+  [this.uniforms.soffit.value,this.uniforms.glazing.value,this.uniforms.floorShade.value]=surfaces;
   this.images=images;
   images.forEach(({color,depth,origin},i)=>{
    this.uniforms['capture'+i].value=color;this.uniforms['distanceMap'+i].value=depth;this.uniforms['origin'+i].value.copy(origin);
@@ -55,6 +55,18 @@ export class RenderedRoom {
    shader.vertexShader='varying vec3 roomPosition;\n'+shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nroomPosition=(modelMatrix*vec4(transformed,1.)).xyz;');
    const uniforms=directions.map((_,i)=>'uniform vec3 origin'+i+';uniform sampler2D capture'+i+',distanceMap'+i+';').join('\n');
    const fn=`
+vec3 surfaceShade(sampler2D image,vec2 uv){
+ vec3 detail=texture2D(image,uv).rgb;
+ vec2 dim=vec2(textureSize(image,0));
+ vec2 dx=dFdx(uv)*dim,dy=dFdy(uv)*dim;
+ float footprint=max(dot(dx,dx),dot(dy,dy));
+ vec3 broad=textureLod(image,uv,max(1.75,.5*log2(max(footprint,1.))+1.)).rgb;
+ const vec3 luma=vec3(.2126,.7152,.0722);
+ float y=dot(detail,luma),delta=dot(broad-detail,luma);
+ // Smooth small lighting steps. Keep high-contrast joints, highlights and hue.
+ float w=(1.-smoothstep(.012,.055,abs(delta)))*(1.-smoothstep(.38,.76,y));
+ return clamp(detail+vec3(w*delta),0.,1.);
+}
 float depthConfidence(sampler2D depthImage,vec2 pixelUV,float dist){
  vec2 packedDepth=texture2D(depthImage,pixelUV).rg;
  float measured=dot(floor(packedDepth*255.+.5),vec2(256.,1.))*.001;
@@ -71,34 +83,45 @@ void sampleRoom(vec3 origin,sampler2D image,sampler2D depthImage,inout vec3 colo
  vec3 eyeRay=normalize(roomPosition-cameraPosition);
  float alignment=clamp(dot(eyeRay,normalize(ray)),0.,1.);
  float weight=valid*mix(.05,1.,alignment*alignment)/(1.+dot(cameraPosition-origin,cameraPosition-origin)*.20);
- colors+=weight*texture2D(image,uv).rgb;total+=weight;
+ colors+=weight*surfaceShade(image,uv);total+=weight;
 }`;
-   shader.fragmentShader='uniform sampler2D soffit,glazing,upper;uniform bool splitCoffer,openCeiling;\nvarying vec3 roomPosition;\n'+uniforms+panoUV+fn+'\n'+shader.fragmentShader;
+   shader.fragmentShader='uniform sampler2D soffit,glazing,upper,floorShade;uniform bool splitCoffer,openCeiling;\nvarying vec3 roomPosition;\n'+uniforms+panoUV+fn+'\n'+shader.fragmentShader;
    let body=`
 vec3 face=normalize(cross(dFdx(roomPosition),dFdy(roomPosition)));
 vec2 ceilingUV=vec2((roomPosition.x-2.6)/8.,(roomPosition.z+10.)/22.)+.5;
 vec2 glassUV=vec2((-roomPosition.z-10.)/22.,(roomPosition.y-1.75)/4.)+.5;
 bool inCeiling=roomPosition.y>=(splitCoffer ? 3.095 : 2.975) && roomPosition.y<3.39 && all(greaterThan(ceilingUV,vec2(0.))) && all(lessThan(ceilingUV,vec2(1.)));
 bool onWindow=abs(roomPosition.x)<.13 && roomPosition.z<-.1 && roomPosition.z>-20.1 && roomPosition.y<3.095 && roomPosition.y>.055 && abs(face.x)>.8;
+vec2 floorUV=vec2((roomPosition.x-2.6)/8.,(-roomPosition.z-10.)/22.)+.5;
+bool onFloor=abs(roomPosition.y)<.038 && face.y>.85 && all(greaterThan(floorUV,vec2(0.))) && all(lessThan(floorUV,vec2(1.)));
 if(${material.name.includes('smoked warm oak') ? 'true' : 'false'}){
  // The narrow sides share their blade's underside sample. Stay inside the blade at grazing angles.
  vec2 bladeUV=ceilingUV;
  bladeUV.y-=face.z*.009/22.;
- gl_FragColor.rgb=texture2D(soffit,bladeUV).rgb*mix(.84,1.,abs(face.y));
+ gl_FragColor.rgb=surfaceShade(soffit,bladeUV)*mix(.84,1.,abs(face.y));
 }else if(openCeiling && roomPosition.y>3.10 && roomPosition.z<0. && roomPosition.z>-20.2 && roomPosition.x>0. && roomPosition.x<5.7){
  gl_FragColor.rgb=min(gl_FragColor.rgb,vec3(.12,.096,.078));
 }else if(${material.name==='PROPOSAL | warm mineral paint' ? 'true' : 'false'} && splitCoffer && inCeiling && abs(face.y)<=.80){
  // Sample just inside the painted edge so its thin return stays on the same finish at oblique angles.
  vec2 insideUV=ceilingUV-vec2(face.x/8.,face.z/22.)*.015;
- gl_FragColor.rgb=texture2D(soffit,insideUV).rgb;
+ gl_FragColor.rgb=surfaceShade(soffit,insideUV);
 }else if(inCeiling && abs(face.y)>.80){
- gl_FragColor.rgb=splitCoffer && roomPosition.y>3.30 ? texture2D(upper,ceilingUV).rgb : texture2D(soffit,ceilingUV).rgb;
+ gl_FragColor.rgb=splitCoffer && roomPosition.y>3.30 ? surfaceShade(upper,ceilingUV) : surfaceShade(soffit,ceilingUV);
 }else if(onWindow){
- gl_FragColor=vec4(texture2D(glazing,glassUV).rgb,1.);
+ gl_FragColor=vec4(surfaceShade(glazing,glassUV),1.);
 }else{
  vec3 projected=vec3(0.);float coverage=0.;`;
    for(let i=0;i<3;i++)body+='sampleRoom(origin'+i+',capture'+i+',distanceMap'+i+',projected,coverage);';
-   body+='if(inCeiling)gl_FragColor.rgb=texture2D(soffit,ceilingUV).rgb;if(coverage>.0001){gl_FragColor.rgb=mix(gl_FragColor.rgb,projected/coverage,smoothstep(.001,.025,coverage));}}';
+   body+='if(inCeiling)gl_FragColor.rgb=surfaceShade(soffit,ceilingUV);if(coverage>.0001){gl_FragColor.rgb=mix(gl_FragColor.rgb,projected/coverage,smoothstep(.001,.025,coverage));}';
+   body+=`
+ if(onFloor){
+  vec3 diffuse=texture2D(floorShade,floorUV).rgb;
+  // Preserve broad reflected highlights above the stable diffuse lighting.
+  vec3 highlight=clamp(gl_FragColor.rgb-diffuse,0.,.35);
+  float strength=smoothstep(.03,.16,dot(highlight,vec3(.2126,.7152,.0722)));
+  gl_FragColor.rgb=diffuse+highlight*strength*smoothstep(.01,.08,coverage);
+ }
+}`;
    shader.fragmentShader=shader.fragmentShader.replace('#include <colorspace_fragment>','#include <colorspace_fragment>\n'+body);
   };
   material.customProgramCacheKey=()=>material.name.includes('smoked warm oak')?'room-oak-v28':material.name==='PROPOSAL | warm mineral paint'?'room-paint-v28':'room-v28';
